@@ -35,7 +35,7 @@ export default async function DashboardPage() {
       todayMeals={todayMealsRes.data ?? []}
       todayWorkout={todayWorkoutRes.data}
       weightLogs={weightRes.data ?? []}
-      recentWorkouts={recentWorkoutsRes.data ?? []}
+      recentWorkouts={(recentWorkoutsRes.data ?? []) as any[]}
       today={today}
     />
   )
