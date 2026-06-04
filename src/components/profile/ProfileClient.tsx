@@ -25,6 +25,20 @@ const GOAL_OPTIONS = [
   { value: 'maintenance', label: '🎯 Maintain', desc: 'Stay at current weight' },
 ]
 
+const EQUIPMENT_OPTIONS = [
+  { value: 'barbell', label: '🏋️ Barbell', desc: 'Olympic bar + plates' },
+  { value: 'dumbbells', label: '💪 Dumbbells', desc: 'Fixed or adjustable' },
+  { value: 'cables', label: '🔗 Cable machine', desc: 'Cable pulley system' },
+  { value: 'machines', label: '🔧 Machines', desc: 'Chest press, leg press, etc.' },
+  { value: 'pull-up bar', label: '🔝 Pull-up bar', desc: 'Wall or door mounted' },
+  { value: 'resistance bands', label: '🟡 Resistance bands', desc: 'Light to heavy bands' },
+  { value: 'kettlebells', label: '🔔 Kettlebells', desc: 'Cast iron kettlebells' },
+  { value: 'bench', label: '🛋️ Bench', desc: 'Flat or adjustable bench' },
+  { value: 'squat rack', label: '🏗️ Squat rack', desc: 'Full rack or squat stands' },
+  { value: 'cardio machines', label: '🏃 Cardio machines', desc: 'Treadmill, bike, rower' },
+  { value: 'bodyweight only', label: '🤸 Bodyweight only', desc: 'No equipment needed' },
+]
+
 function cmToFeetInches(cm: number) {
   const totalInches = cm / 2.54
   const feet = Math.floor(totalInches / 12)
@@ -80,17 +94,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function SimpleInput({
-  value,
-  onChange,
-  type = 'text',
-  placeholder,
-}: {
-  value: string
-  onChange: (v: string) => void
-  type?: string
-  placeholder?: string
-}) {
+function SimpleInput({ value, onChange, type = 'text', placeholder }: { value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <input
       type={type}
@@ -112,6 +116,9 @@ export default function ProfileClient({ profile, userEmail }: Props) {
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg')
   const [heightFt, setHeightFt] = useState('')
   const [heightIn, setHeightIn] = useState('')
+  const [equipment, setEquipment] = useState<string[]>(
+    (profile as unknown as { available_equipment?: string[] })?.available_equipment ?? []
+  )
 
   const [form, setForm] = useState({
     display_name: profile?.display_name ?? '',
@@ -167,6 +174,12 @@ export default function ProfileClient({ profile, userEmail }: Props) {
   }, [form.weight_kg, form.height_cm, form.age, form.sex, form.activity_level, form.goal, useCustomTargets])
 
   useEffect(() => { recalc() }, [recalc])
+
+  function toggleEquipment(value: string) {
+    setEquipment(prev =>
+      prev.includes(value) ? prev.filter(e => e !== value) : [...prev, value]
+    )
+  }
 
   function handleHeightUnitSwitch(unit: 'cm' | 'ft') {
     if (unit === 'ft' && form.height_cm) {
@@ -241,6 +254,7 @@ export default function ProfileClient({ profile, userEmail }: Props) {
       dietary_restrictions: form.dietary_restrictions ? form.dietary_restrictions.split(',').map(s => s.trim()).filter(Boolean) : [],
       cuisine_preferences: form.cuisine_preferences ? form.cuisine_preferences.split(',').map(s => s.trim()).filter(Boolean) : [],
       disliked_foods: form.disliked_foods ? form.disliked_foods.split(',').map(s => s.trim()).filter(Boolean) : [],
+      available_equipment: equipment,
       onboarding_complete: true,
       ...targets,
     }).eq('user_id', (await supabase.auth.getUser()).data.user?.id ?? '')
@@ -341,6 +355,38 @@ export default function ProfileClient({ profile, userEmail }: Props) {
             ))}
           </div>
         </F>
+      </Section>
+
+      <Section title="Available equipment">
+        <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '-8px' }}>
+          Select everything you have access to. Gemini uses this to tailor workout recommendations.
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+          {EQUIPMENT_OPTIONS.map(e => {
+            const selected = equipment.includes(e.value)
+            return (
+              <button key={e.value} onClick={() => toggleEquipment(e.value)} style={{
+                padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left',
+                background: selected ? 'var(--accent-subtle)' : 'var(--surface-2)',
+                border: selected ? '1px solid var(--accent)' : '1px solid var(--border)',
+                display: 'flex', alignItems: 'flex-start', gap: '8px',
+              }}>
+                <span style={{ fontSize: '16px', marginTop: '1px' }}>{e.label.split(' ')[0]}</span>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: '500', color: selected ? 'var(--accent)' : 'var(--text-primary)' }}>
+                    {e.label.split(' ').slice(1).join(' ')}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '1px' }}>{e.desc}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+        {equipment.length === 0 && (
+          <p style={{ fontSize: '12px', color: 'var(--warning)', background: 'var(--warning-subtle)', padding: '10px', borderRadius: '8px' }}>
+            ⚠️ No equipment selected — Gemini will assume a full gym. Select your equipment for accurate recommendations.
+          </p>
+        )}
       </Section>
 
       <Section title="Calorie & macro targets">

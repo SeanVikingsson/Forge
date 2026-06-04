@@ -19,14 +19,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Get profile
   const { data: profile } = await supabase
     .from('profiles')
-    .select('goal, training_days_per_week, weight_kg')
+    .select('goal, training_days_per_week, weight_kg, available_equipment')
     .eq('user_id', user.id)
     .single()
 
-  // Get recent workout sessions (last 7 days)
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
@@ -37,13 +35,16 @@ export async function POST(req: NextRequest) {
     .gte('date', sevenDaysAgo.toISOString().split('T')[0])
     .order('date', { ascending: false })
 
-  // Extract recently trained muscles
   const recentMuscles: string[] = []
   recentSessions?.forEach(session => {
     session.session_exercises?.forEach((se: { exercises?: { muscle_groups?: string[] } }) => {
       se.exercises?.muscle_groups?.forEach((m: string) => recentMuscles.push(m))
     })
   })
+
+  const equipment = profile?.available_equipment?.length
+    ? profile.available_equipment.join(', ')
+    : 'full gym (barbell, dumbbells, cables, machines)'
 
   const { targetMuscles } = await req.json().catch(() => ({ targetMuscles: null }))
 
@@ -53,6 +54,9 @@ User stats:
 - Goal: ${profile?.goal ?? 'bulk'}
 - Training days/week: ${profile?.training_days_per_week ?? 4}
 - Experience level: beginner (less than 1 year)
+- Available equipment: ${equipment}
+
+IMPORTANT: Only suggest exercises that can be performed with the available equipment listed above. Do not suggest exercises requiring equipment not on that list.
 
 Recently trained muscle groups (last 7 days, avoid overtraining these): ${recentMuscles.length ? [...new Set(recentMuscles)].join(', ') : 'none — full body is fine'}
 ${targetMuscles ? `Specifically requested muscle focus: ${targetMuscles}` : ''}
