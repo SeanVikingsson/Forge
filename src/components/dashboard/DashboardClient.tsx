@@ -56,7 +56,6 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
   const [aiLoading, setAiLoading] = useState(false)
   const [aiWorkout, setAiWorkout] = useState<{ name: string; rationale: string; exercises: { name: string; sets: number; reps: string }[] } | null>(null)
 
-  // Macro totals
   const totals = todayMeals.reduce((acc, m) => ({
     calories: acc.calories + m.calories,
     protein_g: acc.protein_g + m.protein_g,
@@ -67,7 +66,6 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
   const calTarget = profile?.calorie_target ?? 2500
   const calPct = Math.min(totals.calories / calTarget, 1)
 
-  // Muscle heatmap - count recent sessions per muscle
   const muscleHits: Record<string, number> = {}
   recentWorkouts.forEach(w => {
     w.session_exercises?.forEach(se => {
@@ -78,9 +76,8 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
     })
   })
 
-  // Weight chart data
   const weightData = [...weightLogs].reverse().map(w => ({
-    date: w.date.slice(5), // MM-DD
+    date: w.date.slice(5),
     weight: w.weight_kg,
   }))
 
@@ -95,95 +92,80 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
     setAiLoading(false)
   }
 
-  const StatCard = ({ label, value, sub, color, onClick }: { label: string; value: string; sub?: string; color?: string; onClick?: () => void }) => (
-    <div
-      onClick={onClick}
-      style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px',
-        padding: '20px', cursor: onClick ? 'pointer' : 'default',
-        transition: 'border-color 0.15s',
-      }}
-    >
-      <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>{label}</div>
-      <div style={{ fontSize: '24px', fontWeight: '700', color: color ?? 'var(--text-primary)' }}>{value}</div>
-      {sub && <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{sub}</div>}
-    </div>
-  )
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header */}
       <div>
-        <h1 style={{ fontSize: '24px', fontWeight: '700' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: '700' }}>
           Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, {profile?.display_name?.split(' ')[0] ?? 'there'} 👋
         </h1>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>
+        <p style={{ color: 'var(--text-secondary)', marginTop: '4px', fontSize: '14px' }}>
           {new Date(today).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
 
-      {/* Quick stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-        <StatCard
-          label="Calories today"
-          value={`${Math.round(totals.calories)}`}
-          sub={`of ${calTarget} kcal target`}
-          color={calPct > 1 ? 'var(--danger)' : calPct > 0.85 ? 'var(--warning)' : 'var(--success)'}
-          onClick={() => router.push('/meals')}
-        />
-        <StatCard
-          label="Protein"
-          value={`${Math.round(totals.protein_g)}g`}
-          sub={`of ${profile?.protein_target_g ?? 180}g target`}
-          color="var(--protein-color)"
-          onClick={() => router.push('/meals')}
-        />
-        <StatCard
-          label="Today's workout"
-          value={todayWorkout ? '✅ Logged' : '—'}
-          sub={todayWorkout?.name ?? 'No session logged yet'}
-          onClick={() => router.push('/workouts')}
-        />
-        <StatCard
-          label="Current weight"
-          value={weightLogs[0] ? `${weightLogs[0].weight_kg}kg` : '—'}
-          sub={weightLogs[0] ? weightLogs[0].date : 'Not logged'}
-          onClick={() => router.push('/progress')}
-        />
+      {/* Quick stats — 2 col on mobile, 4 on desktop */}
+      <div className="forge-stats-grid">
+        {[
+          {
+            label: 'Calories today',
+            value: `${Math.round(totals.calories)}`,
+            sub: `of ${calTarget} kcal target`,
+            color: calPct > 1 ? 'var(--danger)' : calPct > 0.85 ? 'var(--warning)' : 'var(--success)',
+            href: '/meals',
+          },
+          {
+            label: 'Protein',
+            value: `${Math.round(totals.protein_g)}g`,
+            sub: `of ${profile?.protein_target_g ?? 180}g target`,
+            color: 'var(--protein-color)',
+            href: '/meals',
+          },
+          {
+            label: "Today's workout",
+            value: todayWorkout ? '✅ Logged' : '—',
+            sub: todayWorkout?.name ?? 'No session logged yet',
+            color: undefined,
+            href: '/workouts',
+          },
+          {
+            label: 'Current weight',
+            value: weightLogs[0] ? `${weightLogs[0].weight_kg}kg` : '—',
+            sub: weightLogs[0] ? weightLogs[0].date : 'Not logged',
+            color: undefined,
+            href: '/progress',
+          },
+        ].map(s => (
+          <div key={s.label} onClick={() => router.push(s.href)} style={{
+            background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px',
+            padding: '16px', cursor: 'pointer',
+          }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{s.label}</div>
+            <div style={{ fontSize: '22px', fontWeight: '700', color: s.color ?? 'var(--text-primary)' }}>{s.value}</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>{s.sub}</div>
+          </div>
+        ))}
       </div>
 
-      {/* Macros + weight chart row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      {/* Macros + weight — stack on mobile, side by side on desktop */}
+      <div className="forge-two-col">
         {/* Macro rings */}
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ fontSize: '15px', fontWeight: '600' }}>Today&apos;s macros</h2>
-            <button
-              onClick={() => router.push('/meals')}
-              style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
+            <button onClick={() => router.push('/meals')} style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
               + Log meal
             </button>
           </div>
-
-          {/* Calorie bar */}
-          <div style={{ marginBottom: '20px' }}>
+          <div style={{ marginBottom: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Calories</span>
               <span style={{ fontWeight: '600' }}>{Math.round(totals.calories)} / {calTarget} kcal</span>
             </div>
             <div style={{ height: '8px', background: 'var(--surface-3)', borderRadius: '4px', overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', borderRadius: '4px',
-                width: `${calPct * 100}%`,
-                background: calPct > 1 ? 'var(--danger)' : 'var(--accent)',
-                transition: 'width 0.5s ease',
-              }} />
+              <div style={{ height: '100%', borderRadius: '4px', width: `${calPct * 100}%`, background: calPct > 1 ? 'var(--danger)' : 'var(--accent)', transition: 'width 0.5s ease' }} />
             </div>
           </div>
-
           <div style={{ display: 'flex', justifyContent: 'space-around' }}>
             <MacroRing value={totals.protein_g} target={profile?.protein_target_g ?? 180} color="var(--protein-color)" label="Protein" />
             <MacroRing value={totals.carbs_g} target={profile?.carbs_target_g ?? 280} color="var(--carbs-color)" label="Carbs" />
@@ -192,15 +174,10 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
         </div>
 
         {/* Weight trend */}
-        <div style={{
-          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h2 style={{ fontSize: '15px', fontWeight: '600' }}>Weight trend</h2>
-            <button
-              onClick={() => router.push('/progress')}
-              style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
+            <button onClick={() => router.push('/progress')} style={{ fontSize: '12px', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
               + Log weight
             </button>
           </div>
@@ -209,10 +186,7 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
               <LineChart data={weightData}>
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} />
                 <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickLine={false} axisLine={false} width={35} />
-                <Tooltip
-                  contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }}
-                  labelStyle={{ color: 'var(--text-secondary)' }}
-                />
+                <Tooltip contentStyle={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', fontSize: '12px' }} labelStyle={{ color: 'var(--text-secondary)' }} />
                 <Line type="monotone" dataKey="weight" stroke="var(--accent)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -225,46 +199,28 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
       </div>
 
       {/* Muscle heatmap */}
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px',
-      }}>
-        <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Muscle group activity — last 7 days</h2>
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '12px' }}>Muscle group activity — last 7 days</h2>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {ALL_MUSCLE_GROUPS.map(({ key, label, color }) => {
             const hits = muscleHits[key] ?? 0
             const opacity = hits === 0 ? 0.15 : Math.min(0.3 + hits * 0.25, 1)
             return (
-              <div
-                key={key}
-                style={{
-                  padding: '6px 14px', borderRadius: '20px',
-                  background: `${color}`,
-                  opacity,
-                  fontSize: '12px', fontWeight: '500',
-                  color: 'white',
-                  transition: 'opacity 0.3s',
-                }}
-              >
+              <div key={key} style={{ padding: '6px 12px', borderRadius: '20px', background: color, opacity, fontSize: '12px', fontWeight: '500', color: 'white' }}>
                 {label} {hits > 0 ? `×${hits}` : ''}
               </div>
             )
           })}
         </div>
-        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '12px' }}>
-          Faded = not trained recently. Bright = trained this week.
-        </p>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '10px' }}>Faded = not trained recently. Bright = trained this week.</p>
       </div>
 
-      {/* AI Workout suggestion */}
-      <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      {/* AI Workout */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ fontSize: '15px', fontWeight: '600' }}>AI Workout of the Day</h2>
-            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Gemini recommends based on your recent training history
-            </p>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Gemini recommends based on your recent training history</p>
           </div>
           <button
             onClick={getAiWorkout}
@@ -273,7 +229,7 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
               padding: '8px 16px', borderRadius: '8px',
               background: aiLoading ? 'var(--surface-3)' : 'var(--accent)',
               border: 'none', color: 'white', fontSize: '13px', fontWeight: '500',
-              cursor: aiLoading ? 'not-allowed' : 'pointer',
+              cursor: aiLoading ? 'not-allowed' : 'pointer', whiteSpace: 'nowrap',
             }}
           >
             {aiLoading ? 'Generating...' : '✨ Get recommendation'}
@@ -286,10 +242,7 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>{aiWorkout.rationale}</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {aiWorkout.exercises.map((ex, i) => (
-                <div key={i} style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '10px 14px', background: 'var(--surface-2)', borderRadius: '8px',
-                }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: '8px' }}>
                   <span style={{ fontSize: '14px', fontWeight: '500' }}>{ex.name}</span>
                   <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{ex.sets} × {ex.reps}</span>
                 </div>
@@ -297,18 +250,37 @@ export default function DashboardClient({ profile, todayMeals, todayWorkout, wei
             </div>
             <button
               onClick={() => router.push('/workouts?from=ai')}
-              style={{
-                marginTop: '16px', padding: '10px 20px',
-                background: 'var(--success-subtle)', border: '1px solid var(--success)',
-                color: 'var(--success)', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
-                cursor: 'pointer',
-              }}
+              style={{ marginTop: '16px', padding: '10px 20px', background: 'var(--success-subtle)', border: '1px solid var(--success)', color: 'var(--success)', borderRadius: '8px', fontSize: '13px', fontWeight: '500', cursor: 'pointer' }}
             >
               Start this workout →
             </button>
           </div>
         )}
       </div>
+
+      <style>{`
+        .forge-stats-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .forge-two-col {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        @media (min-width: 768px) {
+          .forge-stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+          .forge-two-col {
+            flex-direction: row;
+          }
+          .forge-two-col > * {
+            flex: 1;
+          }
+        }
+      `}</style>
     </div>
   )
 }

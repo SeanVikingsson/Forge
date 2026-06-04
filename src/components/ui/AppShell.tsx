@@ -40,7 +40,6 @@ export default function AppShell({ children, profile }: AppShellProps) {
       position: 'fixed', top: 0, left: 0, bottom: 0,
       zIndex: 50,
     }}>
-      {/* Logo */}
       <div style={{ padding: '8px 12px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{
@@ -58,7 +57,6 @@ export default function AppShell({ children, profile }: AppShellProps) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
         {NAV_ITEMS.map(({ href, icon, label }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
@@ -84,10 +82,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
         })}
       </nav>
 
-      {/* User */}
-      <div style={{
-        borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px',
-      }}>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px' }}>
         <div style={{ padding: '8px 12px', marginBottom: '8px' }}>
           <div style={{ fontSize: '13px', fontWeight: '500' }}>{profile?.display_name ?? 'You'}</div>
         </div>
@@ -110,7 +105,7 @@ export default function AppShell({ children, profile }: AppShellProps) {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       {/* Desktop sidebar */}
-      <div className="desktop-sidebar" style={{ display: 'none' }}>
+      <div className="forge-desktop-sidebar">
         {sidebarContent}
       </div>
 
@@ -118,24 +113,15 @@ export default function AppShell({ children, profile }: AppShellProps) {
       {mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-            zIndex: 49,
-          }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 49 }}
         />
       )}
       {mobileOpen && sidebarContent}
 
       {/* Main */}
-      <main style={{
-        flex: 1,
-        marginLeft: 0,
-        minHeight: '100vh',
-        background: 'var(--background)',
-      }}>
+      <main className="forge-main" style={{ flex: 1, minHeight: '100vh', background: 'var(--background)' }}>
         {/* Mobile top bar */}
-        <div className="mobile-topbar" style={{
-          display: 'none',
+        <div className="forge-mobile-topbar" style={{
           padding: '12px 16px',
           background: 'var(--surface)',
           borderBottom: '1px solid var(--border)',
@@ -150,18 +136,21 @@ export default function AppShell({ children, profile }: AppShellProps) {
           <span style={{ fontWeight: '700', fontSize: '16px' }}>⚡ Forge</span>
         </div>
 
-        <div style={{ padding: '32px', maxWidth: '1200px' }}>
+        <div className="forge-content">
           {children}
         </div>
       </main>
 
       <style>{`
+        .forge-desktop-sidebar { display: none; }
+        .forge-mobile-topbar { display: flex; }
+        .forge-content { padding: 16px; max-width: 1200px; }
+
         @media (min-width: 768px) {
-          .desktop-sidebar { display: block !important; }
-          main { margin-left: 220px !important; }
-        }
-        @media (max-width: 767px) {
-          .mobile-topbar { display: flex !important; }
+          .forge-desktop-sidebar { display: block; }
+          .forge-mobile-topbar { display: none !important; }
+          .forge-main { margin-left: 220px; }
+          .forge-content { padding: 32px; }
         }
       `}</style>
     </div>
