@@ -173,7 +173,7 @@ export default function ProfileClient({ profile, userEmail }: Props) {
         <F label="Goal">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             {GOAL_OPTIONS.map(g => (
-              <button key={g.value} onClick={() => setForm(p => ({ ...p, goal: g.value }))} style={{
+              <button key={g.value} onClick={() => setForm(p => ({ ...p, goal: g.value as Profile['goal'] }))} style={{
                 padding: '12px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left',
                 background: form.goal === g.value ? 'var(--accent-subtle)' : 'var(--surface-2)',
                 border: form.goal === g.value ? '1px solid var(--accent)' : '1px solid var(--border)',
@@ -188,7 +188,7 @@ export default function ProfileClient({ profile, userEmail }: Props) {
         <F label="Activity level">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {ACTIVITY_OPTIONS.map(a => (
-              <button key={a.value} onClick={() => setForm(p => ({ ...p, activity_level: a.value }))} style={{
+              <button key={a.value} onClick={() => setForm(p => ({ ...p, activity_level: a.value as Profile['activity_level'] }))} style={{
                 padding: '10px 14px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 background: form.activity_level === a.value ? 'var(--accent-subtle)' : 'transparent',
                 border: form.activity_level === a.value ? '1px solid var(--accent)' : '1px solid var(--border)',
