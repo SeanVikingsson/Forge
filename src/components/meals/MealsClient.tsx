@@ -1,0 +1,284 @@
+'use client'
+import { useState, useRef } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import type { MealLog, ParsedMeal } from '@/types'
+
+interface Props {
+  initialMeals: MealLog[]
+  profile: { calorie_target: number; protein_target_g: number; carbs_target_g: number; fat_target_g: number } | null
+  today: string
+}
+
+const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'] as const
+
+export default function MealsClient({ initialMeals, profile, today }: Props) {
+  const supabase = createClient()
+  const [meals, setMeals] = useState<MealLog[]>(initialMeals)
+  const [input, setInput] = useState('')
+  const [mealType, setMealType] = useState<typeof MEAL_TYPES[number]>('lunch')
+  const [parsing, setParsing] = useState(false)
+  const [parsedPreview, setParsedPreview] = useState<ParsedMeal | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const totals = meals.reduce((acc, m) => ({
+    cal: acc.cal + m.calories,
+    prot: acc.prot + m.protein_g,
+    carbs: acc.carbs + m.carbs_g,
+    fat: acc.fat + m.fat_g,
+  }), { cal: 0, prot: 0, carbs: 0, fat: 0 })
+
+  async function parseMeal() {
+    if (!input.trim()) return
+    setParsing(true)
+    setError('')
+    setParsedPreview(null)
+    try {
+      const res = await fetch('/api/ai/parse-meal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input, meal_type: mealType }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error); return }
+      setParsedPreview(data.data)
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setParsing(false)
+    }
+  }
+
+  async function saveMeal() {
+    if (!parsedPreview) return
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error: err } = await supabase.from('meal_logs').insert({
+      user_id: user?.id,
+      date: today,
+      meal_type: parsedPreview.meal_type,
+      name: parsedPreview.name,
+      raw_input: input,
+      calories: parsedPreview.totals.calories,
+      protein_g: parsedPreview.totals.protein_g,
+      carbs_g: parsedPreview.totals.carbs_g,
+      fat_g: parsedPreview.totals.fat_g,
+      fibre_g: parsedPreview.totals.fibre_g,
+      items: parsedPreview.items,
+    }).select().single()
+    if (!err && data) {
+      setMeals(prev => [...prev, data])
+      setInput('')
+      setParsedPreview(null)
+    }
+    setSaving(false)
+  }
+
+  async function deleteMeal(id: string) {
+    setDeleting(id)
+    await supabase.from('meal_logs').delete().eq('id', id)
+    setMeals(prev => prev.filter(m => m.id !== id))
+    setDeleting(null)
+  }
+
+  const calTarget = profile?.calorie_target ?? 2500
+  const calPct = Math.min(totals.cal / calTarget, 1)
+
+  const MacroBar = ({ label, value, target, color }: { label: string; value: number; target: number; color: string }) => (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '4px' }}>
+        <span style={{ color: 'var(--text-secondary)' }}>{label}</span>
+        <span style={{ fontWeight: '500' }}>{Math.round(value)}g / {target}g</span>
+      </div>
+      <div style={{ height: '6px', background: 'var(--surface-3)', borderRadius: '3px', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: '3px', width: `${Math.min(value / target, 1) * 100}%`, background: color, transition: 'width 0.4s' }} />
+      </div>
+    </div>
+  )
+
+  const mealsByType = MEAL_TYPES.reduce((acc, type) => {
+    acc[type] = meals.filter(m => m.meal_type === type)
+    return acc
+  }, {} as Record<string, MealLog[]>)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <h1 style={{ fontSize: '22px', fontWeight: '700' }}>Meal Tracker</h1>
+
+      {/* Daily summary */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '15px', fontWeight: '600' }}>Today&apos;s nutrition</h2>
+          <span style={{ fontSize: '20px', fontWeight: '700' }}>{Math.round(totals.cal)} <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '400' }}>/ {calTarget} kcal</span></span>
+        </div>
+        <div style={{ height: '8px', background: 'var(--surface-3)', borderRadius: '4px', overflow: 'hidden', marginBottom: '16px' }}>
+          <div style={{ height: '100%', borderRadius: '4px', width: `${calPct * 100}%`, background: calPct > 1 ? 'var(--danger)' : 'var(--accent)', transition: 'width 0.4s' }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <MacroBar label="Protein" value={totals.prot} target={profile?.protein_target_g ?? 180} color="var(--protein-color)" />
+          <MacroBar label="Carbohydrates" value={totals.carbs} target={profile?.carbs_target_g ?? 280} color="var(--carbs-color)" />
+          <MacroBar label="Fat" value={totals.fat} target={profile?.fat_target_g ?? 70} color="var(--fat-color)" />
+        </div>
+      </div>
+
+      {/* Log a meal */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+        <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Log a meal</h2>
+
+        {/* Meal type selector */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
+          {MEAL_TYPES.map(type => (
+            <button
+              key={type}
+              onClick={() => setMealType(type)}
+              style={{
+                padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
+                border: mealType === type ? '1px solid var(--accent)' : '1px solid var(--border)',
+                background: mealType === type ? 'var(--accent-subtle)' : 'transparent',
+                color: mealType === type ? 'var(--accent)' : 'var(--text-secondary)',
+                cursor: 'pointer', textTransform: 'capitalize',
+              }}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
+
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          placeholder="e.g. 2 scrambled eggs, 2 slices brown toast with butter, large protein shake with 300ml semi-skimmed milk"
+          rows={3}
+          style={{
+            width: '100%', padding: '12px', background: 'var(--surface-2)',
+            border: '1px solid var(--border)', borderRadius: '8px',
+            color: 'var(--text-primary)', fontSize: '14px', resize: 'vertical',
+            fontFamily: 'inherit',
+          }}
+          onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) parseMeal() }}
+        />
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+          <button
+            onClick={parseMeal}
+            disabled={!input.trim() || parsing}
+            style={{
+              padding: '10px 20px', borderRadius: '8px',
+              background: !input.trim() || parsing ? 'var(--surface-3)' : 'var(--accent)',
+              border: 'none', color: 'white', fontSize: '13px', fontWeight: '500',
+              cursor: !input.trim() || parsing ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {parsing ? '⏳ Parsing...' : '✨ Parse with AI'}
+          </button>
+          {parsedPreview && (
+            <button onClick={() => setParsedPreview(null)} style={{ padding: '10px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
+              Clear
+            </button>
+          )}
+        </div>
+
+        {error && <p style={{ marginTop: '10px', fontSize: '13px', color: 'var(--danger)', background: 'var(--danger-subtle)', padding: '10px', borderRadius: '8px' }}>{error}</p>}
+
+        {/* Parsed preview */}
+        {parsedPreview && (
+          <div style={{ marginTop: '16px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '10px', padding: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div>
+                <h3 style={{ fontSize: '15px', fontWeight: '600' }}>{parsedPreview.name}</h3>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>{parsedPreview.meal_type} · {parsedPreview.confidence} confidence</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '20px', fontWeight: '700' }}>{Math.round(parsedPreview.totals.calories)} kcal</div>
+              </div>
+            </div>
+
+            {/* Macro pills */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
+              {[
+                { label: 'P', value: parsedPreview.totals.protein_g, color: 'var(--protein-color)' },
+                { label: 'C', value: parsedPreview.totals.carbs_g, color: 'var(--carbs-color)' },
+                { label: 'F', value: parsedPreview.totals.fat_g, color: 'var(--fat-color)' },
+                { label: 'Fibre', value: parsedPreview.totals.fibre_g, color: 'var(--fibre-color)' },
+              ].map(m => (
+                <span key={m.label} style={{ padding: '3px 10px', borderRadius: '12px', background: `${m.color}20`, color: m.color, fontSize: '12px', fontWeight: '500' }}>
+                  {m.label}: {Math.round(m.value)}g
+                </span>
+              ))}
+            </div>
+
+            {/* Items */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
+              {parsedPreview.items.map((item, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                  <span>{item.name} <span style={{ color: 'var(--text-muted)' }}>({item.quantity})</span></span>
+                  <span>{Math.round(item.calories)} kcal</span>
+                </div>
+              ))}
+            </div>
+
+            {parsedPreview.notes && (
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', fontStyle: 'italic' }}>💡 {parsedPreview.notes}</p>
+            )}
+
+            <button
+              onClick={saveMeal}
+              disabled={saving}
+              style={{
+                width: '100%', padding: '10px',
+                background: saving ? 'var(--surface-3)' : 'var(--success)',
+                border: 'none', borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '600',
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {saving ? 'Saving...' : '✓ Save this meal'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Meals by type */}
+      {MEAL_TYPES.map(type => {
+        const typeMeals = mealsByType[type]
+        if (!typeMeals.length) return null
+        const typeTotal = typeMeals.reduce((a, m) => a + m.calories, 0)
+        return (
+          <div key={type} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h2 style={{ fontSize: '15px', fontWeight: '600', textTransform: 'capitalize' }}>{type}</h2>
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{Math.round(typeTotal)} kcal</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {typeMeals.map(meal => (
+                <div key={meal.id} style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '10px 12px', background: 'var(--surface-2)', borderRadius: '8px',
+                }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: '500' }}>{meal.name}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      P: {Math.round(meal.protein_g)}g · C: {Math.round(meal.carbs_g)}g · F: {Math.round(meal.fat_g)}g
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '15px', fontWeight: '600' }}>{Math.round(meal.calories)} kcal</span>
+                    <button
+                      onClick={() => deleteMeal(meal.id)}
+                      disabled={deleting === meal.id}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '16px', padding: '2px' }}
+                    >
+                      {deleting === meal.id ? '...' : '×'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}

@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0a0a0f;
+  --surface: #111118;
+  --surface-2: #1a1a24;
+  --surface-3: #222230;
+  --border: #2a2a3a;
+  --border-subtle: #1e1e2a;
+  --text-primary: #f0f0f8;
+  --text-secondary: #8888aa;
+  --text-muted: #55556a;
+
+  /* Brand */
+  --accent: #6c63ff;
+  --accent-hover: #7c74ff;
+  --accent-subtle: rgba(108, 99, 255, 0.12);
+
+  /* Semantic */
+  --success: #22c55e;
+  --success-subtle: rgba(34, 197, 94, 0.1);
+  --warning: #f59e0b;
+  --warning-subtle: rgba(245, 158, 11, 0.1);
+  --danger: #ef4444;
+  --danger-subtle: rgba(239, 68, 68, 0.1);
+
+  /* Macros */
+  --protein-color: #3b82f6;
+  --carbs-color: #f59e0b;
+  --fat-color: #ef4444;
+  --fibre-color: #22c55e;
+
+  /* Muscle groups */
+  --muscle-chest: #ef4444;
+  --muscle-back: #3b82f6;
+  --muscle-shoulders: #f59e0b;
+  --muscle-arms: #8b5cf6;
+  --muscle-legs: #22c55e;
+  --muscle-core: #f97316;
+  --muscle-cardio: #06b6d4;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--background);
+  color: var(--text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
