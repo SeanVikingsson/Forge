@@ -44,17 +44,72 @@ function lbsToKg(lbs: number) {
   return Math.round((lbs / 2.20462) * 10) / 10
 }
 
+const inputStyle = { width: '100%', padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }
+
+function F({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>{label}</label>
+      {children}
+      {hint && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{hint}</p>}
+    </div>
+  )
+}
+
+function UnitToggle({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', background: 'var(--surface-3)', borderRadius: '6px', padding: '2px', gap: '2px' }}>
+      {options.map(o => (
+        <button key={o} onClick={() => onChange(o)} style={{
+          padding: '4px 10px', borderRadius: '4px', fontSize: '12px', border: 'none', cursor: 'pointer',
+          background: value === o ? 'var(--accent)' : 'transparent',
+          color: value === o ? 'white' : 'var(--text-muted)',
+          fontWeight: value === o ? '600' : '400',
+        }}>{o}</button>
+      ))}
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
+      <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>{title}</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>{children}</div>
+    </div>
+  )
+}
+
+function SimpleInput({
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  type?: string
+  placeholder?: string
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={inputStyle}
+    />
+  )
+}
+
 export default function ProfileClient({ profile, userEmail }: Props) {
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()
   const isOnboarding = searchParams.get('onboarding') === 'true' || !profile?.onboarding_complete
 
-  // Unit toggles
   const [heightUnit, setHeightUnit] = useState<'cm' | 'ft'>('cm')
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lbs'>('kg')
-
-  // Separate ft/in state for display
   const [heightFt, setHeightFt] = useState('')
   const [heightIn, setHeightIn] = useState('')
 
@@ -82,7 +137,6 @@ export default function ProfileClient({ profile, userEmail }: Props) {
   const [saved, setSaved] = useState(false)
   const [useCustomTargets, setUseCustomTargets] = useState(false)
 
-  // Initialise ft/in from cm on load
   useEffect(() => {
     if (profile?.height_cm) {
       const { feet, inches } = cmToFeetInches(profile.height_cm)
@@ -196,46 +250,6 @@ export default function ProfileClient({ profile, userEmail }: Props) {
     if (isOnboarding) router.push('/dashboard')
   }
 
-  const inputStyle = { width: '100%', padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }
-
-  const F = ({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) => (
-    <div>
-      <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>{label}</label>
-      {children}
-      {hint && <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>{hint}</p>}
-    </div>
-  )
-
-  const UnitToggle = ({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) => (
-    <div style={{ display: 'flex', background: 'var(--surface-3)', borderRadius: '6px', padding: '2px', gap: '2px' }}>
-      {options.map(o => (
-        <button key={o} onClick={() => onChange(o)} style={{
-          padding: '4px 10px', borderRadius: '4px', fontSize: '12px', border: 'none', cursor: 'pointer',
-          background: value === o ? 'var(--accent)' : 'transparent',
-          color: value === o ? 'white' : 'var(--text-muted)',
-          fontWeight: value === o ? '600' : '400',
-        }}>{o}</button>
-      ))}
-    </div>
-  )
-
-  const SimpleInput = ({ field, type = 'text', placeholder }: { field: keyof typeof form; type?: string; placeholder?: string }) => (
-    <input
-      type={type}
-      value={form[field] as string}
-      onChange={e => setForm(prev => ({ ...prev, [field]: e.target.value }))}
-      placeholder={placeholder}
-      style={inputStyle}
-    />
-  )
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px' }}>
-      <h2 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}>{title}</h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>{children}</div>
-    </div>
-  )
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '700px' }}>
       <div>
@@ -245,9 +259,15 @@ export default function ProfileClient({ profile, userEmail }: Props) {
 
       <Section title="Personal details">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-          <F label="Display name"><SimpleInput field="display_name" placeholder="Your name" /></F>
-          <F label="Email"><input value={userEmail} disabled style={{ ...inputStyle, background: 'var(--surface-3)', color: 'var(--text-muted)' }} /></F>
-          <F label="Age"><SimpleInput field="age" type="number" placeholder="e.g. 28" /></F>
+          <F label="Display name">
+            <SimpleInput value={form.display_name} onChange={v => setForm(p => ({ ...p, display_name: v }))} placeholder="Your name" />
+          </F>
+          <F label="Email">
+            <input value={userEmail} disabled style={{ ...inputStyle, background: 'var(--surface-3)', color: 'var(--text-muted)' }} />
+          </F>
+          <F label="Age">
+            <SimpleInput value={form.age} onChange={v => setForm(p => ({ ...p, age: v }))} type="number" placeholder="e.g. 28" />
+          </F>
           <F label="Sex">
             <div style={{ display: 'flex', gap: '8px' }}>
               {(['male', 'female'] as const).map(s => (
@@ -262,54 +282,28 @@ export default function ProfileClient({ profile, userEmail }: Props) {
             </div>
           </F>
 
-          {/* Height with unit toggle */}
           <F label="Height">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <UnitToggle options={['cm', 'ft']} value={heightUnit} onChange={v => handleHeightUnitSwitch(v as 'cm' | 'ft')} />
               </div>
               {heightUnit === 'cm' ? (
-                <input
-                  type="number"
-                  value={form.height_cm}
-                  onChange={e => setForm(prev => ({ ...prev, height_cm: e.target.value }))}
-                  placeholder="e.g. 178"
-                  style={inputStyle}
-                />
+                <SimpleInput value={form.height_cm} onChange={v => setForm(p => ({ ...p, height_cm: v }))} type="number" placeholder="e.g. 178" />
               ) : (
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="number"
-                    value={heightFt}
-                    onChange={e => handleHeightFtChange(e.target.value)}
-                    placeholder="ft"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  <input
-                    type="number"
-                    value={heightIn}
-                    onChange={e => handleHeightInChange(e.target.value)}
-                    placeholder="in"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
+                  <input type="number" value={heightFt} onChange={e => handleHeightFtChange(e.target.value)} placeholder="ft" style={{ ...inputStyle, flex: 1 }} />
+                  <input type="number" value={heightIn} onChange={e => handleHeightInChange(e.target.value)} placeholder="in" style={{ ...inputStyle, flex: 1 }} />
                 </div>
               )}
             </div>
           </F>
 
-          {/* Weight with unit toggle */}
           <F label="Current weight">
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                 <UnitToggle options={['kg', 'lbs']} value={weightUnit} onChange={v => handleWeightUnitSwitch(v as 'kg' | 'lbs')} />
               </div>
-              <input
-                type="number"
-                value={form.weight_display}
-                onChange={e => handleWeightChange(e.target.value)}
-                placeholder={weightUnit === 'kg' ? 'e.g. 80' : 'e.g. 176'}
-                style={inputStyle}
-              />
+              <SimpleInput value={form.weight_display} onChange={handleWeightChange} type="number" placeholder={weightUnit === 'kg' ? 'e.g. 80' : 'e.g. 176'} />
             </div>
           </F>
         </div>
@@ -330,7 +324,9 @@ export default function ProfileClient({ profile, userEmail }: Props) {
             ))}
           </div>
         </F>
-        <F label="Training days per week"><SimpleInput field="training_days_per_week" type="number" placeholder="e.g. 4" /></F>
+        <F label="Training days per week">
+          <SimpleInput value={form.training_days_per_week} onChange={v => setForm(p => ({ ...p, training_days_per_week: v }))} type="number" placeholder="e.g. 4" />
+        </F>
         <F label="Activity level">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {ACTIVITY_OPTIONS.map(a => (
@@ -366,23 +362,23 @@ export default function ProfileClient({ profile, userEmail }: Props) {
         </div>
         {useCustomTargets && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            <F label="Calorie target (kcal)"><SimpleInput field="calorie_target" type="number" /></F>
-            <F label="Protein (g)"><SimpleInput field="protein_target_g" type="number" /></F>
-            <F label="Carbs (g)"><SimpleInput field="carbs_target_g" type="number" /></F>
-            <F label="Fat (g)"><SimpleInput field="fat_target_g" type="number" /></F>
+            <F label="Calorie target (kcal)"><SimpleInput value={form.calorie_target} onChange={v => setForm(p => ({ ...p, calorie_target: v }))} type="number" /></F>
+            <F label="Protein (g)"><SimpleInput value={form.protein_target_g} onChange={v => setForm(p => ({ ...p, protein_target_g: v }))} type="number" /></F>
+            <F label="Carbs (g)"><SimpleInput value={form.carbs_target_g} onChange={v => setForm(p => ({ ...p, carbs_target_g: v }))} type="number" /></F>
+            <F label="Fat (g)"><SimpleInput value={form.fat_target_g} onChange={v => setForm(p => ({ ...p, fat_target_g: v }))} type="number" /></F>
           </div>
         )}
       </Section>
 
       <Section title="Dietary preferences (used by AI)">
         <F label="Dietary restrictions" hint="Comma separated — e.g. vegetarian, no dairy, gluten-free">
-          <SimpleInput field="dietary_restrictions" placeholder="e.g. no shellfish, lactose intolerant" />
+          <SimpleInput value={form.dietary_restrictions} onChange={v => setForm(p => ({ ...p, dietary_restrictions: v }))} placeholder="e.g. no shellfish, lactose intolerant" />
         </F>
         <F label="Cuisine preferences" hint="Comma separated — influences recipe suggestions">
-          <SimpleInput field="cuisine_preferences" placeholder="e.g. Mediterranean, Asian, Irish" />
+          <SimpleInput value={form.cuisine_preferences} onChange={v => setForm(p => ({ ...p, cuisine_preferences: v }))} placeholder="e.g. Mediterranean, Asian, Irish" />
         </F>
         <F label="Disliked foods" hint="Gemini will avoid these in suggestions">
-          <SimpleInput field="disliked_foods" placeholder="e.g. Brussels sprouts, liver" />
+          <SimpleInput value={form.disliked_foods} onChange={v => setForm(p => ({ ...p, disliked_foods: v }))} placeholder="e.g. Brussels sprouts, liver" />
         </F>
       </Section>
 
