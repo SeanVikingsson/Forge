@@ -21,7 +21,9 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const totals = meals.reduce((acc, m) => ({
     cal: acc.cal + m.calories,
@@ -30,16 +32,51 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
     fat: acc.fat + m.fat_g,
   }), { cal: 0, prot: 0, carbs: 0, fat: 0 })
 
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+    const reader = new FileReader()
+    reader.onload = () => setImagePreview(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  function clearImage() {
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   async function parseMeal() {
-    if (!input.trim()) return
+    if (!input.trim() && !imageFile) return
     setParsing(true)
     setError('')
     setParsedPreview(null)
+
     try {
+      let body: Record<string, unknown>
+
+      if (imageFile) {
+        // Convert image to base64
+        const base64 = await new Promise<string>((res, rej) => {
+          const reader = new FileReader()
+          reader.onload = () => res((reader.result as string).split(',')[1])
+          reader.onerror = rej
+          reader.readAsDataURL(imageFile)
+        })
+        body = {
+          input: input.trim() || 'Parse the food/meal from this image',
+          meal_type: mealType,
+          image: { data: base64, mimeType: imageFile.type },
+        }
+      } else {
+        body = { input, meal_type: mealType }
+      }
+
       const res = await fetch('/api/ai/parse-meal', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input, meal_type: mealType }),
+        body: JSON.stringify(body),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
@@ -60,7 +97,7 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
       date: today,
       meal_type: parsedPreview.meal_type,
       name: parsedPreview.name,
-      raw_input: input,
+      raw_input: input || (imageFile ? '[Image upload]' : ''),
       calories: parsedPreview.totals.calories,
       protein_g: parsedPreview.totals.protein_g,
       carbs_g: parsedPreview.totals.carbs_g,
@@ -72,6 +109,7 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
       setMeals(prev => [...prev, data])
       setInput('')
       setParsedPreview(null)
+      clearImage()
     }
     setSaving(false)
   }
@@ -127,27 +165,21 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '20px' }}>
         <h2 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Log a meal</h2>
 
-        {/* Meal type selector */}
+        {/* Meal type */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '14px' }}>
           {MEAL_TYPES.map(type => (
-            <button
-              key={type}
-              onClick={() => setMealType(type)}
-              style={{
-                padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
-                border: mealType === type ? '1px solid var(--accent)' : '1px solid var(--border)',
-                background: mealType === type ? 'var(--accent-subtle)' : 'transparent',
-                color: mealType === type ? 'var(--accent)' : 'var(--text-secondary)',
-                cursor: 'pointer', textTransform: 'capitalize',
-              }}
-            >
-              {type}
-            </button>
+            <button key={type} onClick={() => setMealType(type)} style={{
+              padding: '6px 14px', borderRadius: '20px', fontSize: '13px',
+              border: mealType === type ? '1px solid var(--accent)' : '1px solid var(--border)',
+              background: mealType === type ? 'var(--accent-subtle)' : 'transparent',
+              color: mealType === type ? 'var(--accent)' : 'var(--text-secondary)',
+              cursor: 'pointer', textTransform: 'capitalize',
+            }}>{type}</button>
           ))}
         </div>
 
+        {/* Text input */}
         <textarea
-          ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="e.g. 2 scrambled eggs, 2 slices brown toast with butter, large protein shake with 300ml semi-skimmed milk"
@@ -158,24 +190,61 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
             color: 'var(--text-primary)', fontSize: '14px', resize: 'vertical',
             fontFamily: 'inherit',
           }}
-          onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) parseMeal() }}
         />
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+        {/* Image upload area */}
+        <div style={{ marginTop: '10px' }}>
+          {imagePreview ? (
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <img src={imagePreview} alt="Meal preview" style={{ maxHeight: '120px', maxWidth: '100%', borderRadius: '8px', border: '1px solid var(--border)' }} />
+              <button
+                onClick={clearImage}
+                style={{
+                  position: 'absolute', top: '4px', right: '4px',
+                  width: '24px', height: '24px', borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.7)', border: 'none',
+                  color: 'white', fontSize: '14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >×</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                padding: '8px 16px', background: 'transparent',
+                border: '1px dashed var(--border)', borderRadius: '8px',
+                color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '6px',
+              }}
+            >
+              📷 Upload image (Deliveroo screenshot, food packaging, etc.)
+            </button>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            style={{ display: 'none' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
           <button
             onClick={parseMeal}
-            disabled={!input.trim() || parsing}
+            disabled={(!input.trim() && !imageFile) || parsing}
             style={{
               padding: '10px 20px', borderRadius: '8px',
-              background: !input.trim() || parsing ? 'var(--surface-3)' : 'var(--accent)',
+              background: (!input.trim() && !imageFile) || parsing ? 'var(--surface-3)' : 'var(--accent)',
               border: 'none', color: 'white', fontSize: '13px', fontWeight: '500',
-              cursor: !input.trim() || parsing ? 'not-allowed' : 'pointer',
+              cursor: (!input.trim() && !imageFile) || parsing ? 'not-allowed' : 'pointer',
             }}
           >
             {parsing ? '⏳ Parsing...' : '✨ Parse with AI'}
           </button>
           {parsedPreview && (
-            <button onClick={() => setParsedPreview(null)} style={{ padding: '10px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
+            <button onClick={() => { setParsedPreview(null); clearImage() }} style={{ padding: '10px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>
               Clear
             </button>
           )}
@@ -196,7 +265,6 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
               </div>
             </div>
 
-            {/* Macro pills */}
             <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
               {[
                 { label: 'P', value: parsedPreview.totals.protein_g, color: 'var(--protein-color)' },
@@ -210,7 +278,6 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
               ))}
             </div>
 
-            {/* Items */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px' }}>
               {parsedPreview.items.map((item, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -224,16 +291,12 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', fontStyle: 'italic' }}>💡 {parsedPreview.notes}</p>
             )}
 
-            <button
-              onClick={saveMeal}
-              disabled={saving}
-              style={{
-                width: '100%', padding: '10px',
-                background: saving ? 'var(--surface-3)' : 'var(--success)',
-                border: 'none', borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '600',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
+            <button onClick={saveMeal} disabled={saving} style={{
+              width: '100%', padding: '10px',
+              background: saving ? 'var(--surface-3)' : 'var(--success)',
+              border: 'none', borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '600',
+              cursor: saving ? 'not-allowed' : 'pointer',
+            }}>
               {saving ? 'Saving...' : '✓ Save this meal'}
             </button>
           </div>

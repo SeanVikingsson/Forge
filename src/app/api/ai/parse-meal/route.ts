@@ -19,10 +19,9 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { input, meal_type } = await req.json()
-  if (!input?.trim()) return NextResponse.json({ error: 'No input provided' }, { status: 400 })
+  const { input, meal_type, image } = await req.json()
+  if (!input?.trim() && !image) return NextResponse.json({ error: 'No input provided' }, { status: 400 })
 
-  // Fetch user dietary preferences for context
   const { data: profile } = await supabase
     .from('profiles')
     .select('dietary_restrictions, disliked_foods')
@@ -33,10 +32,9 @@ export async function POST(req: NextRequest) {
     ? `Note: this user has the following dietary restrictions/preferences: ${profile.dietary_restrictions.join(', ')}.`
     : ''
 
-  const prompt = `You are a precise nutritionist AI. Parse the following meal description into structured nutritional data.
+  const prompt = `You are a precise nutritionist AI. Parse the following meal ${image ? 'shown in the image' : 'description'} into structured nutritional data.
 ${dietaryContext}
-
-Meal description: "${input}"
+${input ? `Meal description: "${input}"` : ''}
 Meal type hint: ${meal_type || 'unspecified'}
 
 Respond ONLY with a valid JSON object (no markdown, no backticks) in this exact shape:
@@ -68,7 +66,17 @@ Use standard UK/international food nutritional values. Be precise. If quantities
 
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
-    const result = await model.generateContent(prompt)
+
+    let result
+    if (image) {
+      result = await model.generateContent([
+        { inlineData: { data: image.data, mimeType: image.mimeType } },
+        prompt,
+      ])
+    } else {
+      result = await model.generateContent(prompt)
+    }
+
     const text = result.response.text().replace(/```json|```/g, '').trim()
     const parsed: ParsedMeal = JSON.parse(text)
     return NextResponse.json({ data: parsed, usage: { used: usage.used, limit: usage.limit } })
