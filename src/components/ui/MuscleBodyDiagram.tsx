@@ -3,7 +3,7 @@ import { useState } from 'react'
 import Body from 'react-muscle-highlighter'
 import type { ExtendedBodyPart } from 'react-muscle-highlighter'
 
-type Slug = NonNullable<ExtendedBodyPart['slug']>
+type Slug = 'abs' | 'adductors' | 'ankles' | 'biceps' | 'calves' | 'chest' | 'deltoids' | 'feet' | 'forearm' | 'gluteal' | 'hamstring' | 'hands' | 'hair' | 'head' | 'knees' | 'lower-back' | 'neck' | 'obliques' | 'quadriceps' | 'tibialis' | 'trapezius' | 'triceps' | 'upper-back'
 
 interface Props {
   muscleHits: Record<string, number>
@@ -15,13 +15,13 @@ const MUSCLE_SLUG_MAP: Record<string, Slug[]> = {
   'upper chest': ['chest'],
   back: ['upper-back'],
   'upper back': ['upper-back'],
-  lats: ['lats'],
+  lats: ['upper-back'],
   traps: ['trapezius'],
   'lower back': ['lower-back'],
-  shoulders: ['front-deltoids', 'back-deltoids'],
-  'lateral delts': ['front-deltoids', 'back-deltoids'],
-  'front delts': ['front-deltoids'],
-  'rear delts': ['back-deltoids'],
+  shoulders: ['deltoids'],
+  'lateral delts': ['deltoids'],
+  'front delts': ['deltoids'],
+  'rear delts': ['deltoids'],
   biceps: ['biceps'],
   triceps: ['triceps'],
   forearms: ['forearm'],
@@ -32,8 +32,8 @@ const MUSCLE_SLUG_MAP: Record<string, Slug[]> = {
   hamstrings: ['hamstring'],
   glutes: ['gluteal'],
   calves: ['calves'],
-  adductors: ['adductor'],
-  abductors: ['abductors'],
+  adductors: ['adductors'],
+  abductors: ['adductors'],
   cardiovascular: [],
 }
 
