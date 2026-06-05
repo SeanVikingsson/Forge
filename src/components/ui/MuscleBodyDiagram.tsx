@@ -3,13 +3,14 @@ import { useState } from 'react'
 import Body from 'react-muscle-highlighter'
 import type { ExtendedBodyPart } from 'react-muscle-highlighter'
 
+type Slug = NonNullable<ExtendedBodyPart['slug']>
+
 interface Props {
   muscleHits: Record<string, number>
   sex: 'male' | 'female'
 }
 
-// Map our internal muscle keys to react-muscle-highlighter slugs
-const MUSCLE_SLUG_MAP: Record<string, string[]> = {
+const MUSCLE_SLUG_MAP: Record<string, Slug[]> = {
   chest: ['chest'],
   'upper chest': ['chest'],
   back: ['upper-back'],
@@ -36,7 +37,6 @@ const MUSCLE_SLUG_MAP: Record<string, string[]> = {
   cardiovascular: [],
 }
 
-// Intensity colours: light → dark red matching the reference image style
 const INTENSITY_COLORS = ['#ffb3b3', '#ff6666', '#cc0000']
 
 function buildBodyData(muscleHits: Record<string, number>): ExtendedBodyPart[] {
@@ -51,10 +51,13 @@ function buildBodyData(muscleHits: Record<string, number>): ExtendedBodyPart[] {
 
   return Object.entries(slugHits)
     .filter(([, hits]) => hits > 0)
-    .map(([slug: slug as ExtendedBodyPart[`slug`], hits]) => ({
-      slug: slug as ExtendedBodyPart[`slug`],
-      intensity: Math.min(hits, 3) as 1 | 2 | 3,
-    }))
+    .map(([slug, hits]) => {
+      const part: ExtendedBodyPart = {
+        slug: slug as Slug,
+        intensity: Math.min(hits, 3) as 1 | 2 | 3,
+      }
+      return part
+    })
 }
 
 export default function MuscleBodyDiagram({ muscleHits, sex }: Props) {
@@ -69,7 +72,6 @@ export default function MuscleBodyDiagram({ muscleHits, sex }: Props) {
 
   return (
     <div>
-      {/* Front / Back toggle */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
         {(['front', 'back'] as const).map(v => (
           <button key={v} onClick={() => setSide(v)} style={{
@@ -82,7 +84,6 @@ export default function MuscleBodyDiagram({ muscleHits, sex }: Props) {
         ))}
       </div>
 
-      {/* Body diagram */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <Body
           data={bodyData}
@@ -93,7 +94,6 @@ export default function MuscleBodyDiagram({ muscleHits, sex }: Props) {
         />
       </div>
 
-      {/* Legend */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'center', marginTop: '12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <div style={{ width: '12px', height: '12px', borderRadius: '3px', background: 'var(--surface-3)', border: '1px solid var(--border)' }} />
