@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { MealLog, ParsedMeal } from '@/types'
 
@@ -37,79 +37,63 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Barcode scanner
-  const [scannerOpen, setScannerOpen] = useState(false)
-  const [scannerError, setScannerError] = useState('')
+  // Barcode
   const [lookingUp, setLookingUp] = useState(false)
+  const [scannerError, setScannerError] = useState('')
   const [scannedProduct, setScannedProduct] = useState<ScannedProduct | null>(null)
   const [scannedQuantity, setScannedQuantity] = useState('100')
-  const scannerDivRef = useRef<HTMLDivElement>(null)
-  const scannerRef = useRef<unknown>(null)
+  const barcodeInputRef = useRef<HTMLInputElement>(null)
 
-  // Start barcode scanner
-  async function openScanner() {
-    setScannerOpen(true)
+  // Handle barcode image capture — try BarcodeDetector API first, fallback to manual entry
+  async function handleBarcodeCapture(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
     setScannerError('')
+    setLookingUp(true)
     setScannedProduct(null)
-  }
 
-  useEffect(() => {
-    if (!scannerOpen || !scannerDivRef.current) return
-
-    let html5QrCode: unknown = null
-
-    async function startScanner() {
-      try {
-        const { Html5Qrcode } = await import('html5-qrcode')
-        html5QrCode = new Html5Qrcode('barcode-scanner-div')
-        scannerRef.current = html5QrCode
-
-        await (html5QrCode as { start: (c: unknown, o: unknown, s: unknown, e: unknown) => Promise<void> }).start(
-          { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 250, height: 120 } },
-          async (decodedText: string) => {
-            await (html5QrCode as { stop: () => Promise<void> }).stop()
-            setScannerOpen(false)
-            await lookupBarcode(decodedText)
-          },
-          () => {}
-        )
-      } catch (err) {
-        console.error('Scanner error:', err)
-        setScannerError('Could not access camera. Please allow camera permissions and try again.')
-        setScannerOpen(false)
-      }
-    }
-
-    startScanner()
-
-    return () => {
-      if (html5QrCode) {
-        (html5QrCode as { stop: () => Promise<void>; clear: () => void }).stop().catch(() => {}).finally(() => {
-          (html5QrCode as { stop: () => Promise<void>; clear: () => void }).clear()
+    try {
+      // Try native BarcodeDetector API (available on Android Chrome, Samsung Browser)
+      if ('BarcodeDetector' in window) {
+        const detector = new (window as unknown as { BarcodeDetector: new (opts: object) => { detect: (img: HTMLImageElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector({
+          formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'],
         })
-      }
-    }
-  }, [scannerOpen])
+        const img = new Image()
+        img.src = URL.createObjectURL(file)
+        await new Promise(res => { img.onload = res })
+        const barcodes = await detector.detect(img)
 
-  async function closeScanner() {
-    if (scannerRef.current) {
-      try {
-        await (scannerRef.current as { stop: () => Promise<void> }).stop()
-      } catch {}
+        if (barcodes.length > 0) {
+          await lookupBarcode(barcodes[0].rawValue)
+          setLookingUp(false)
+          return
+        }
+        // No barcode detected in image
+        setScannerError('No barcode detected in the photo. Try again with better lighting, or enter the barcode number manually below.')
+      } else {
+        setScannerError('Barcode detection not supported in this browser. Enter the barcode number manually below.')
+      }
+    } catch {
+      setScannerError('Could not read barcode from image. Try entering the number manually below.')
     }
-    setScannerOpen(false)
+
+    setLookingUp(false)
+    // Reset file input
+    if (barcodeInputRef.current) barcodeInputRef.current.value = ''
   }
+
+  const [manualBarcode, setManualBarcode] = useState('')
 
   async function lookupBarcode(barcode: string) {
     setLookingUp(true)
     setScannerError('')
     try {
-      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`)
+      const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode.trim()}.json`)
       const data = await res.json()
 
       if (data.status !== 1 || !data.product) {
-        setScannerError(`Product not found for barcode ${barcode}. Try typing the meal manually.`)
+        setScannerError(`Product not found for barcode "${barcode}". Check the number and try again.`)
         setLookingUp(false)
         return
       }
@@ -117,7 +101,7 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
       const p = data.product
       const n = p.nutriments ?? {}
 
-      const product: ScannedProduct = {
+      setScannedProduct({
         name: p.product_name || p.generic_name || 'Unknown product',
         calories: Math.round(n['energy-kcal_100g'] ?? n['energy-kcal'] ?? 0),
         protein_g: Math.round((n['proteins_100g'] ?? 0) * 10) / 10,
@@ -125,10 +109,9 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
         fat_g: Math.round((n['fat_100g'] ?? 0) * 10) / 10,
         fibre_g: Math.round((n['fiber_100g'] ?? 0) * 10) / 10,
         serving_size: p.serving_size,
-      }
-
-      setScannedProduct(product)
+      })
       setScannedQuantity('100')
+      setManualBarcode('')
     } catch {
       setScannerError('Failed to look up product. Check your connection and try again.')
     }
@@ -158,20 +141,13 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
       date: today,
       meal_type: mealType,
       name: `${scannedProduct.name} (${grams}g)`,
-      raw_input: `[Barcode scan] ${scannedProduct.name}`,
+      raw_input: `[Barcode] ${scannedProduct.name}`,
       calories: scaled.calories,
       protein_g: scaled.protein_g,
       carbs_g: scaled.carbs_g,
       fat_g: scaled.fat_g,
       fibre_g: scaled.fibre_g,
-      items: [{
-        name: scannedProduct.name,
-        quantity: `${grams}g`,
-        calories: scaled.calories,
-        protein_g: scaled.protein_g,
-        carbs_g: scaled.carbs_g,
-        fat_g: scaled.fat_g,
-      }],
+      items: [{ name: scannedProduct.name, quantity: `${grams}g`, calories: scaled.calories, protein_g: scaled.protein_g, carbs_g: scaled.carbs_g, fat_g: scaled.fat_g }],
     }).select().single()
 
     if (!err && data) {
@@ -313,40 +289,60 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
           ))}
         </div>
 
-        {/* Barcode scanner button */}
-        {!scannedProduct && !scannerOpen && (
-          <button
-            onClick={openScanner}
-            style={{
-              width: '100%', padding: '10px', marginBottom: '10px',
-              background: 'var(--surface-2)', border: '1px dashed var(--border)',
-              borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            }}
-          >
-            📷 Scan barcode
-          </button>
-        )}
+        {/* Barcode section */}
+        {!scannedProduct && (
+          <div style={{ marginBottom: '14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px' }}>
+            <p style={{ fontSize: '13px', fontWeight: '500', marginBottom: '10px' }}>📷 Scan barcode</p>
 
-        {/* Camera / scanner view */}
-        {scannerOpen && (
-          <div style={{ marginBottom: '14px', position: 'relative' }}>
-            <div id="barcode-scanner-div" ref={scannerDivRef} style={{ width: '100%', borderRadius: '8px', overflow: 'hidden' }} />
+            {/* Camera capture button */}
             <button
-              onClick={closeScanner}
+              onClick={() => barcodeInputRef.current?.click()}
+              disabled={lookingUp}
               style={{
-                marginTop: '8px', width: '100%', padding: '8px',
-                background: 'var(--surface-3)', border: '1px solid var(--border)',
-                borderRadius: '8px', color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer',
+                width: '100%', padding: '10px', marginBottom: '10px',
+                background: lookingUp ? 'var(--surface-3)' : 'var(--accent-subtle)',
+                border: '1px solid var(--accent)', borderRadius: '8px',
+                color: 'var(--accent)', fontSize: '13px', fontWeight: '500',
+                cursor: lookingUp ? 'not-allowed' : 'pointer',
               }}
             >
-              Cancel
+              {lookingUp ? '⏳ Looking up product...' : '📷 Take photo of barcode'}
             </button>
-          </div>
-        )}
+            <input
+              ref={barcodeInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleBarcodeCapture}
+              style={{ display: 'none' }}
+            />
 
-        {lookingUp && (
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px' }}>⏳ Looking up product...</p>
+            {/* Manual barcode entry */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                type="number"
+                value={manualBarcode}
+                onChange={e => setManualBarcode(e.target.value)}
+                placeholder="Or enter barcode number manually"
+                style={{ flex: 1, padding: '8px 12px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '13px' }}
+              />
+              <button
+                onClick={() => manualBarcode.trim() && lookupBarcode(manualBarcode)}
+                disabled={!manualBarcode.trim() || lookingUp}
+                style={{
+                  padding: '8px 14px', borderRadius: '8px',
+                  background: !manualBarcode.trim() || lookingUp ? 'var(--surface-3)' : 'var(--accent)',
+                  border: 'none', color: 'white', fontSize: '13px', cursor: !manualBarcode.trim() || lookingUp ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Look up
+              </button>
+            </div>
+
+            {scannerError && (
+              <p style={{ marginTop: '8px', fontSize: '12px', color: 'var(--warning)', background: 'var(--warning-subtle)', padding: '8px 10px', borderRadius: '6px' }}>{scannerError}</p>
+            )}
+          </div>
         )}
 
         {/* Scanned product preview */}
@@ -355,7 +351,9 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
               <div>
                 <h3 style={{ fontSize: '15px', fontWeight: '600' }}>{scannedProduct.name}</h3>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Values per 100g · {scannedProduct.serving_size ? `Serving: ${scannedProduct.serving_size}` : ''}</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Per 100g {scannedProduct.serving_size ? `· Serving: ${scannedProduct.serving_size}` : ''}
+                </span>
               </div>
               <button onClick={() => setScannedProduct(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '18px' }}>×</button>
             </div>
@@ -371,7 +369,7 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
               <label style={{ fontSize: '13px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Quantity (g)</label>
               <input
                 type="number"
@@ -381,34 +379,20 @@ export default function MealsClient({ initialMeals, profile, today }: Props) {
               />
             </div>
 
-            {/* Scaled totals */}
             {(() => {
               const grams = parseFloat(scannedQuantity) || 100
               const s = getScaledProduct(scannedProduct, grams)
               return (
-                <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
                   For {grams}g: <strong style={{ color: 'var(--text-primary)' }}>{s.calories} kcal</strong> · P: {s.protein_g}g · C: {s.carbs_g}g · F: {s.fat_g}g
-                </div>
+                </p>
               )
             })()}
 
-            <button
-              onClick={saveScannedProduct}
-              disabled={saving}
-              style={{
-                width: '100%', padding: '10px',
-                background: saving ? 'var(--surface-3)' : 'var(--success)',
-                border: 'none', borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '600',
-                cursor: saving ? 'not-allowed' : 'pointer',
-              }}
-            >
+            <button onClick={saveScannedProduct} disabled={saving} style={{ width: '100%', padding: '10px', background: saving ? 'var(--surface-3)' : 'var(--success)', border: 'none', borderRadius: '8px', color: 'white', fontSize: '14px', fontWeight: '600', cursor: saving ? 'not-allowed' : 'pointer' }}>
               {saving ? 'Saving...' : '✓ Save this meal'}
             </button>
           </div>
-        )}
-
-        {scannerError && (
-          <p style={{ fontSize: '13px', color: 'var(--danger)', background: 'var(--danger-subtle)', padding: '10px', borderRadius: '8px', marginBottom: '10px' }}>{scannerError}</p>
         )}
 
         {/* Text input */}
