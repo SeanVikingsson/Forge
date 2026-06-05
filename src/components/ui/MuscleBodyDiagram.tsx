@@ -51,8 +51,8 @@ function buildBodyData(muscleHits: Record<string, number>): ExtendedBodyPart[] {
 
   return Object.entries(slugHits)
     .filter(([, hits]) => hits > 0)
-    .map(([slug, hits]) => ({
-      slug,
+    .map(([slug: slug as ExtendedBodyPart[`slug`], hits]) => ({
+      slug: slug as ExtendedBodyPart[`slug`],
       intensity: Math.min(hits, 3) as 1 | 2 | 3,
     }))
 }
